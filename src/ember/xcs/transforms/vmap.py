@@ -376,11 +376,11 @@ def vmap(
         batch_size: int = _get_batch_size(inputs=inputs, in_axes=in_axes)
 
         # Handling empty prompt batch case
-        if "prompts" not in inputs or (
-            isinstance(inputs.get("prompts"), (list, tuple))
-            and not inputs.get("prompts")
-        ):
-            return {"results": []}
+        # if "prompts" not in inputs or (
+        #     isinstance(inputs.get("prompts"), (list, tuple))
+        #     and not inputs.get("prompts")
+        # ):
+        #     return {"results": []}
 
         batched_inputs = _prepare_batched_inputs(
             inputs=inputs, in_axes=in_axes, batch_size=batch_size

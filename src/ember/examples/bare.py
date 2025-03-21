@@ -16,11 +16,54 @@ To run:
 from typing import ClassVar, Dict, List, Type
 
 # Ember API imports
-from ember.api.xcs import jit
+from ember.api.xcs import jit, vmap
 from ember.core.registry.model.model_module.lm import LMModule, LMModuleConfig
 from ember.core.registry.operator.base.operator_base import Operator
 from ember.core.registry.specification.specification import Specification
 from ember.core.types.ember_model import EmberModel, Field
+from ember.xcs.engine.execution_options import execution_options
+
+###############################################################################
+# Task Prompts
+###############################################################################
+
+gsm8k_base_prompt_template = """Here are a few examples of grade school math word problems that require performing a sequence of elementary calculations using basic arithmetic operations. A bright middle school student should be able to solve each problem. The numerical answer is provided at the end of each example after ####.
+
+{examples}
+
+EXAMPLE START
+"""
+
+gsm8k_refine_prompt_template = """Improve the given grade school math word problem. Edit the problem or answer to be more similar in style to the examples, and disambiguate as necessary, in addition to correcting any errors. Do not change the theme of the problem. A bright middle school student should be able to solve each problem. Problems require no concepts beyond the level of early Algebra. Note how the numerical answer is provided after #### after each brief reasoning for a question. Provide your edited problem in the following format:
+"Question:
+[question]
+Answer: [answer]"
+Provide only the question and answer in the given format. Here are some examples of categories and problems on those categories:
+{examples}
+
+Now it's your turn. Here is the question and anwer for you to edit:
+Question:
+{question}
+Answer:
+{answer}
+Provide only the improved question and answer in the given format. Do not include any commentary or notes. Start your response with the question."""
+
+gsm8k_example_template = "Question:\n{question}\nAnswer:\n{answer}"
+
+gsm8k_examples = [
+    {
+        "question": """Alice has 20 quarters. She wants to exchange them for nickels and so she goes to the bank. After getting back from the bank, she discovers that 20% of the nickels are iron nickels worth $3 each. What is the total value of her money now?""",
+        "answer": "A quarter is worth five nickels because .25 / .05 = <<.25/.05=5>>5 She gets 100 nickels from the bank because 20 x 5 = <<20*5=100>>100 20 of the nickels are iron nickels because 100 x .20 = <<100*.20=20>>20 80 of the nickels are regular because 100 - 20 = <<100-20=80>>80 The iron nickels are worth $60 because 20 x 3 = <<20*3=60>>60 The regular nickels are worth $4 because 80 x .05 = <<80*.05=4>>4 Her money is now worth $64 because 60 + 4 = <<60+4=64>>64 #### 64",
+    },
+    {
+        "question": "A church has 120 members. 40% are adults. The rest are children. How many children more children are there than adults?",
+        "answer": "There are 48 adults because 120 x .4 = <<120*.4=48>>48 60% of members are children because 100 - 40 = <<100-40=60>>60 There are 72 children because 120 x .6 = <<120*.6=72>>72 There are 24 more children than adults because 72 - 48 = <<72-48=24>>24 #### 24",
+    },
+    {
+        "question": "Lisa is looking to attempt a World Record. She has decided to try and match Joey Chestnut's record of eating 75 full hotdogs, buns included, in 10 minutes. Halfway through the time Lisa has eaten 20 hotdogs. How many hotdogs will she have to eat per minute to at least tie Joey Chestnut's record?",
+        "answer": "Joey Chestnut ate 75 hotdogs to claim the record and Lisa has eaten 20 hot dogs so far, so she still needs to eat 75-20=<<75-20=55>>55 hotdogs to tie Joey Chestnut. Lisa has a 10 minute time period to eat the hotdogs and half the time has already passed, which means Lisa has 10/2=<<10/2=5>>5 minutes left until the competition is over. If she needs to eat 55 hotdogs to tie Joey Chestnut and there are 5 minutes left in the competition period then she needs to eat 55/5=<<55/5=11>>11 hot dogs per minute to have a chance of tying for a win. #### 11",
+    },
+]
 
 ###############################################################################
 # Input/Output Models
@@ -168,7 +211,7 @@ class ParseResponse(Operator[RawOutput, ParserOutput]):
         return ParserOutput(parsed_output=result)
 
 ###############################################################################
-# Verification Operator
+# Full BARE Operator
 ###############################################################################
 @jit()
 class BARE(Operator[BAREInput, ParserOutput]):
@@ -197,10 +240,10 @@ class BARE(Operator[BAREInput, ParserOutput]):
 
         # Step 2: Parse response
         parsed_base_output = self.parse_response(inputs=base_output)
-        print("=========BASE GENERATION=========")
-        for key, value in parsed_base_output.parsed_output.items():
-            print(f"{key}: {value}")
-        print("=================================")
+        # print("=========BASE GENERATION=========")
+        # for key, value in parsed_base_output.parsed_output.items():
+        #     print(f"{key}: {value}")
+        # print("=================================")
 
         # Step 3: Instruct refinement
         refine_inputs = RefineInput(
@@ -216,63 +259,49 @@ class BARE(Operator[BAREInput, ParserOutput]):
 
         return parse_output
 
+def run_bare_in_parallel():
+    """Run BARE operator in parallel to generate multiple examples."""
+    # Create an instantiation of BARE operator
+    bare_op = BARE(
+        base_model_name="gpt-4o-mini",
+        base_temp=1.0,
+        refine_model_name="gpt-4o-mini",
+        refine_temp=0.7
+    )
+
+    # Create vectorized version for parallel processing
+    parallel_bare = vmap(bare_op, in_axes={"seed": 0})
+
+    # Create batch input with multiple seeds
+    batch_input = {
+        # Same for all runs
+        "base_prompt_template": gsm8k_base_prompt_template,
+        "instruct_prompt_template": gsm8k_refine_prompt_template,
+        "example_template": gsm8k_example_template,
+        "examples": gsm8k_examples,
+        "start": "EXAMPLE START",
+        "stop": "EXAMPLE END",
+
+        # Different for each parallel run (3 examples)
+        "seed": ["algebra", "geometry", "statistics"]
+    }
+
+    # exec in parallel with optimal performance
+    results = parallel_bare(inputs=batch_input)
+
+    # Process results
+    print(results)
+    for i, result in enumerate(results["result"]):
+        print(f"Example {i+1}:")
+        print(f"  Question: {result.parsed_output['question']}")
+        print(f"  Answer: {result.parsed_output['answer']}...")
+
+    return results
+
 ###############################################################################
 # Main
 ###############################################################################
 
 if __name__ == "__main__":
     # Define input for the BARE system
-    gsm8k_base_prompt_template = """Here are a few examples of grade school math word problems that require performing a sequence of elementary calculations using basic arithmetic operations. A bright middle school student should be able to solve each problem. The numerical answer is provided at the end of each example after ####.
-
-{examples}
-
-EXAMPLE START
-"""
-
-    gsm8k_refine_prompt_template = """Improve the given grade school math word problem. Edit the problem or answer to be more similar in style to the examples, and disambiguate as necessary, in addition to correcting any errors. Do not change the theme of the problem. A bright middle school student should be able to solve each problem. Problems require no concepts beyond the level of early Algebra. Note how the numerical answer is provided after #### after each brief reasoning for a question. Provide your edited problem in the following format:
-"Question:
-[question]
-Answer: [answer]"
-Provide only the question and answer in the given format. Here are some examples of categories and problems on those categories:
-{examples}
-
-Now it's your turn. Here is the question and anwer for you to edit:
-Question:
-{question}
-Answer:
-{answer}
-Provide only the improved question and answer in the given format. Do not include any commentary or notes. Start your response with the question."""
-
-    gsm8k_example_template = "Question:\n{question}\nAnswer:\n{answer}"
-
-    gsm8k_examples = [
-            {
-                "question": """Alice has 20 quarters. She wants to exchange them for nickels and so she goes to the bank. After getting back from the bank, she discovers that 20% of the nickels are iron nickels worth $3 each. What is the total value of her money now?""",
-                "answer": "A quarter is worth five nickels because .25 / .05 = <<.25/.05=5>>5 She gets 100 nickels from the bank because 20 x 5 = <<20*5=100>>100 20 of the nickels are iron nickels because 100 x .20 = <<100*.20=20>>20 80 of the nickels are regular because 100 - 20 = <<100-20=80>>80 The iron nickels are worth $60 because 20 x 3 = <<20*3=60>>60 The regular nickels are worth $4 because 80 x .05 = <<80*.05=4>>4 Her money is now worth $64 because 60 + 4 = <<60+4=64>>64 #### 64",
-            },
-            {
-                "question": "A church has 120 members. 40% are adults. The rest are children. How many children more children are there than adults?",
-                "answer": "There are 48 adults because 120 x .4 = <<120*.4=48>>48 60% of members are children because 100 - 40 = <<100-40=60>>60 There are 72 children because 120 x .6 = <<120*.6=72>>72 There are 24 more children than adults because 72 - 48 = <<72-48=24>>24 #### 24",
-            },
-            {
-                "question": "Lisa is looking to attempt a World Record. She has decided to try and match Joey Chestnut's record of eating 75 full hotdogs, buns included, in 10 minutes. Halfway through the time Lisa has eaten 20 hotdogs. How many hotdogs will she have to eat per minute to at least tie Joey Chestnut's record?",
-                "answer": "Joey Chestnut ate 75 hotdogs to claim the record and Lisa has eaten 20 hot dogs so far, so she still needs to eat 75-20=<<75-20=55>>55 hotdogs to tie Joey Chestnut. Lisa has a 10 minute time period to eat the hotdogs and half the time has already passed, which means Lisa has 10/2=<<10/2=5>>5 minutes left until the competition is over. If she needs to eat 55 hotdogs to tie Joey Chestnut and there are 5 minutes left in the competition period then she needs to eat 55/5=<<55/5=11>>11 hot dogs per minute to have a chance of tying for a win. #### 11",
-            },
-        ]
-
-    inputs = BAREInput(
-        base_prompt_template=gsm8k_base_prompt_template,
-        instruct_prompt_template=gsm8k_refine_prompt_template,
-        example_template=gsm8k_example_template,
-        examples=gsm8k_examples,
-        start="EXAMPLE START",
-        stop="EXAMPLE END",
-    )
-
-    # Run the BARE system
-    bare = BARE(base_model_name="gpt-4o-mini", base_temp=1.0, refine_model_name="gpt-4o-mini", refine_temp=0.7)
-    result = bare(inputs=inputs)
-    print("=======INSTRUCT REFINEMENT=======")
-    for key, value in result.parsed_output.items():
-        print(f"{key}: {value}")
-    print("=================================")
+    run_bare_in_parallel()

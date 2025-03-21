@@ -632,7 +632,7 @@ def structural_jit(
 
 
 # Vectorized mapping
-def vmap(func: Callable[..., T]) -> Callable[..., List[T]]:
+def vmap(func: Callable[..., T], in_axes=0, out_axes=0) -> Callable[..., List[T]]:
     """Vectorized mapping transformation.
 
     Transforms a function that operates on single elements into one that
@@ -653,7 +653,7 @@ def vmap(func: Callable[..., T]) -> Callable[..., List[T]]:
         results = batch_add_one([1, 2, 3])  # [2, 3, 4]
         ```
     """
-    return _vmap(func)
+    return _vmap(func, in_axes=in_axes, out_axes=out_axes)
 
 
 # Parallel mapping
