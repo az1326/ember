@@ -134,14 +134,14 @@ class BaseGeneration(Operator[BaseInput, RawOutput]):
     temperature: float
     specification: ClassVar[Specification] = BaseGenerationSpecification()
 
-    def __init__(self, *, model_name: str, temperature: float = 1.0) -> None:
-        self.model_name = model_name
+    def __init__(self, *, model_id: str, temperature: float = 1.0) -> None:
+        self.model_name = model_id
         self.temperature = temperature
 
         # Configure internal LM module using the API
         self.lm_module = LMModule(
             config=LMModuleConfig(
-                model_name=model_name,
+                id=model_id,
                 temperature=temperature,
             )
         )
@@ -169,14 +169,14 @@ class InstructRefinement(Operator[RefineInput, RawOutput]):
     temperature: float
     specification: ClassVar[Specification] = InstructRefinementSpecification()
 
-    def __init__(self, *, model_name: str, temperature: float = 1.0) -> None:
-        self.model_name = model_name
+    def __init__(self, *, model_id: str, temperature: float = 1.0) -> None:
+        self.model_name = model_id
         self.temperature = temperature
 
         # Configure internal LM module using the API
         self.lm_module = LMModule(
             config=LMModuleConfig(
-                model_name=model_name,
+                id=model_id,
                 temperature=temperature,
             )
         )
@@ -222,9 +222,9 @@ class BARE(Operator[BAREInput, ParserOutput]):
     parse_response: ParseResponse
     specification: ClassVar[Specification] = BARESpecification()
 
-    def __init__(self, base_model_name: str, base_temp: float, refine_model_name: str, refine_temp: float) -> None:
-        self.base_generation = BaseGeneration(model_name=base_model_name, temperature=base_temp)
-        self.instruct_refinement = InstructRefinement(model_name=refine_model_name, temperature=refine_temp)
+    def __init__(self, base_model_id: str, base_temp: float, refine_model_id: str, refine_temp: float) -> None:
+        self.base_generation = BaseGeneration(model_id=base_model_id, temperature=base_temp)
+        self.instruct_refinement = InstructRefinement(model_id=refine_model_id, temperature=refine_temp)
         self.parse_response = ParseResponse()
 
     def forward(self, *, inputs: BAREInput) -> Dict[str, str]:
@@ -263,9 +263,9 @@ def run_bare_in_parallel():
     """Run BARE operator in parallel to generate multiple examples."""
     # Create an instantiation of BARE operator
     bare_op = BARE(
-        base_model_name="gpt-4o-mini",
+        base_model_id="openai:gpt-4o-mini",
         base_temp=1.0,
-        refine_model_name="gpt-4o-mini",
+        refine_model_id="openai:gpt-4o-mini",
         refine_temp=0.7
     )
 
@@ -292,11 +292,10 @@ def run_bare_in_parallel():
     results = parallel_bare(inputs=batch_input)
 
     # Process results
-    print(results)
     for i, result in enumerate(results["result"]):
         print(f"Example {i+1}:")
         print(f"  Question: {result.parsed_output['question']}")
-        print(f"  Answer: {result.parsed_output['answer']}...")
+        print(f"  Answer: {result.parsed_output['answer']}")
 
     return results
 
