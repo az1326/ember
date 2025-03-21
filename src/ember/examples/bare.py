@@ -282,8 +282,10 @@ def run_bare_in_parallel():
         "start": "EXAMPLE START",
         "stop": "EXAMPLE END",
 
-        # Different for each parallel run (3 examples)
-        "seed": ["algebra", "geometry", "statistics"]
+        # Different for each parallel run. Not used in this example, but could
+        # be used to seed each generation differently by modifying Input models
+        # and prompt formatting functions.
+        "seed": [None] * 3
     }
 
     # exec in parallel with optimal performance
