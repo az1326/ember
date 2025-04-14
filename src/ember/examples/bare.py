@@ -14,14 +14,24 @@ To run:
 """
 
 from typing import ClassVar, Dict, List, Type
+import os
 
 # Ember API imports
+from ember import initialize_ember
 from ember.api.xcs import jit, vmap
 from ember.core.registry.model.model_module.lm import LMModule, LMModuleConfig
 from ember.core.registry.operator.base.operator_base import Operator
 from ember.core.registry.specification.specification import Specification
 from ember.core.types.ember_model import EmberModel, Field
-from ember.xcs.engine.execution_options import execution_options
+from ember.core.registry.model import (
+    ModelService,
+    ModelFactory,
+    BaseProviderModel,
+    ModelInfo,
+    ProviderInfo,
+    ChatResponse
+)
+from openai import OpenAI
 
 ###############################################################################
 # Task Prompts
@@ -64,6 +74,70 @@ gsm8k_examples = [
         "answer": "Joey Chestnut ate 75 hotdogs to claim the record and Lisa has eaten 20 hot dogs so far, so she still needs to eat 75-20=<<75-20=55>>55 hotdogs to tie Joey Chestnut. Lisa has a 10 minute time period to eat the hotdogs and half the time has already passed, which means Lisa has 10/2=<<10/2=5>>5 minutes left until the competition is over. If she needs to eat 55 hotdogs to tie Joey Chestnut and there are 5 minutes left in the competition period then she needs to eat 55/5=<<55/5=11>>11 hot dogs per minute to have a chance of tying for a win. #### 11",
     },
 ]
+
+###############################################################################
+# Models
+###############################################################################
+
+# Provider class for vllm-served base model
+class CustomVLLMBaseProvider(BaseProviderModel):
+    """Provider for base models served via vllm's openai-compatible server."""
+
+    PROVIDER_NAME = "CustomVLLMBase"
+
+    def create_client(self) -> None:
+        client = OpenAI(
+            base_url=self.model_info.provider.base_url,
+            api_key=self.model_info.provider.default_api_key,
+        )
+        return client
+
+    def forward(self, request):
+        response = self.client.completions.create(
+            model=self.model_info.name,
+            prompt=request.prompt,
+            max_tokens=1000,
+            temperature=request.temperature,
+            stop="EXAMPLE END",
+        )
+        print(response.choices[0].text.strip())
+        return ChatResponse(data=response.choices[0].text.strip(), raw_output=response)
+
+ModelFactory.register_custom_provider(provider_name="CustomVLLMBase", provider_class=CustomVLLMBaseProvider)
+
+# Provider info
+vllm_base_provider = ProviderInfo(
+    name="CustomVLLMBase",
+    default_api_key=os.environ["VLLM_API_KEY"],
+    base_url="http://35.230.18.113:5152/v1",
+)
+
+openai_provider = ProviderInfo(
+    name="OpenAI",
+    default_api_key=os.environ["OPENAI_API_KEY"],
+    base_url="https://api.openai.com/v1"
+)
+
+# Model info
+llama_8b_base_model = ModelInfo(
+    id="vllm_base:llama-8b-base",
+    name="meta-llama/Llama-3.1-8B",
+    provider=vllm_base_provider
+)
+
+gpt4o_model = ModelInfo(
+    id="openai:gpt-4o-mini",
+    name="gpt-4o-mini",
+    provider=openai_provider
+)
+
+# Register models
+registry = initialize_ember(auto_discover=False, initialize_context=False)
+registry.register_model(model_info=llama_8b_base_model)
+registry.register_model(model_info=gpt4o_model)
+
+# Create a model service
+model_service = ModelService(registry=registry)
 
 ###############################################################################
 # Input/Output Models
@@ -134,7 +208,7 @@ class BaseGeneration(Operator[BaseInput, RawOutput]):
     temperature: float
     specification: ClassVar[Specification] = BaseGenerationSpecification()
 
-    def __init__(self, *, model_id: str, temperature: float = 1.0) -> None:
+    def __init__(self, *, model_id: str, temperature: float = 0.7) -> None:
         self.model_name = model_id
         self.temperature = temperature
 
@@ -143,7 +217,8 @@ class BaseGeneration(Operator[BaseInput, RawOutput]):
             config=LMModuleConfig(
                 id=model_id,
                 temperature=temperature,
-            )
+            ),
+            model_service=model_service
         )
     
     def format_prompt(self, inputs: BaseInput) -> str:
@@ -155,7 +230,6 @@ class BaseGeneration(Operator[BaseInput, RawOutput]):
             example_str = f"\n{inputs.start}\n{example_str}\n{inputs.stop}\n"
             examples_str += example_str
         prompt = prompt.format(examples=examples_str)
-        prompt += f"\n{inputs.start}"
         return prompt
 
     def forward(self, *, inputs: BaseInput) -> Dict[str, str]:
@@ -169,7 +243,7 @@ class InstructRefinement(Operator[RefineInput, RawOutput]):
     temperature: float
     specification: ClassVar[Specification] = InstructRefinementSpecification()
 
-    def __init__(self, *, model_id: str, temperature: float = 1.0) -> None:
+    def __init__(self, *, model_id: str, temperature: float = 0.7) -> None:
         self.model_name = model_id
         self.temperature = temperature
 
@@ -178,7 +252,8 @@ class InstructRefinement(Operator[RefineInput, RawOutput]):
             config=LMModuleConfig(
                 id=model_id,
                 temperature=temperature,
-            )
+            ),
+            model_service=model_service
         )
     
     def format_prompt(self, inputs: RefineInput) -> Dict[str, str]:
@@ -263,8 +338,8 @@ def run_bare_in_parallel():
     """Run BARE operator in parallel to generate multiple examples."""
     # Create an instantiation of BARE operator
     bare_op = BARE(
-        base_model_id="openai:gpt-4o-mini",
-        base_temp=1.0,
+        base_model_id="vllm_base:llama-8b-base",
+        base_temp=0.7,
         refine_model_id="openai:gpt-4o-mini",
         refine_temp=0.7
     )
