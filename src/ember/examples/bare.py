@@ -303,6 +303,7 @@ class BARE(Operator[BAREInput, ParserOutput]):
         self.parse_response = ParseResponse()
 
     def forward(self, *, inputs: BAREInput) -> Dict[str, str]:
+        print(type(inputs))
         # Step 1: Base generation
         base_inputs = BaseInput(
             prompt_template=inputs.base_prompt_template,
@@ -334,11 +335,42 @@ class BARE(Operator[BAREInput, ParserOutput]):
 
         return parse_output
 
+def run_bare_serial():
+    """Run BARE operator serially to generate multiple examples."""
+    # Create an instantiation of BARE operator
+    bare_op = BARE(
+        base_model_id="openai:gpt-4o-mini",
+        base_temp=0.7,
+        refine_model_id="openai:gpt-4o-mini",
+        refine_temp=0.7
+    )
+
+    bare_input = BAREInput(
+        base_prompt_template=gsm8k_base_prompt_template,
+        instruct_prompt_template=gsm8k_refine_prompt_template,
+        example_template=gsm8k_example_template,
+        examples=gsm8k_examples,
+        start="EXAMPLE START",
+        stop="EXAMPLE END",
+    )
+
+    # Run the BARE operator
+    results = [bare_op(inputs=bare_input) for _ in range(3)]
+
+    # Process results
+    for i, result in enumerate(results):
+        print(result)
+        print(f"Example {i+1}:")
+        print(f"  Question: {result.parsed_output['question']}")
+        print(f"  Answer: {result.parsed_output['answer']}")
+
+    return results
+
 def run_bare_in_parallel():
     """Run BARE operator in parallel to generate multiple examples."""
     # Create an instantiation of BARE operator
     bare_op = BARE(
-        base_model_id="vllm_base:llama-8b-base",
+        base_model_id="openai:gpt-4o-mini",
         base_temp=0.7,
         refine_model_id="openai:gpt-4o-mini",
         refine_temp=0.7
@@ -380,4 +412,5 @@ def run_bare_in_parallel():
 
 if __name__ == "__main__":
     # Define input for the BARE system
-    run_bare_in_parallel()
+    # run_bare_in_parallel()
+    run_bare_serial()
