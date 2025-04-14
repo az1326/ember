@@ -46,7 +46,7 @@ Typical usage example:
     model_info = ModelInfo(
         id="deepmind:gemini-1.5-pro",
         name="gemini-1.5-pro",
-        provider=ProviderInfo(name="Deepmind", api_key="YOUR_API_KEY")
+        provider=ProviderInfo(name="Deepmind", api_key="${GOOGLE_API_KEY}")
     )
 
     # Initialize the model
@@ -54,7 +54,9 @@ Typical usage example:
 
     # Basic usage
     response = model("What is the Ember framework?")
-    print(response.data)  # The model's response text
+    # Access response content with response.data
+    
+    # Example: "Ember is a Python framework for building AI applications..."
 
     # Advanced usage with more parameters
     response = model(
@@ -65,9 +67,10 @@ Typical usage example:
     )
 
     # Access usage information
-    print(f"Used {response.usage.total_tokens} tokens")
-    print(f"Prompt tokens: {response.usage.prompt_tokens}")
-    print(f"Completion tokens: {response.usage.completion_tokens}")
+    # Example response.usage attributes:
+    # - response.usage.total_tokens -> 320
+    # - response.usage.prompt_tokens -> 45
+    # - response.usage.completion_tokens -> 275
     ```
 
 For higher-level usage, prefer the model registry or API interfaces:
@@ -76,7 +79,7 @@ For higher-level usage, prefer the model registry or API interfaces:
 
     # Using the models API (automatically handles authentication)
     response = models.deepmind.gemini_15_pro("Tell me about Ember")
-    print(response.data)
+    # Access response with response.data
     ```
 """
 
@@ -88,8 +91,8 @@ from google.api_core.exceptions import NotFound
 from google.generativeai import GenerativeModel, types
 from pydantic import Field, field_validator
 from tenacity import retry, stop_after_attempt, wait_exponential
-from typing_extensions import TypedDict
 
+from ember.core.exceptions import ModelProviderError, ValidationError
 from ember.core.registry.model.base.schemas.chat_schemas import (
     ChatRequest,
     ChatResponse,
@@ -244,10 +247,16 @@ class GeminiChatParameters(BaseChatParameters):
             int: The validated token count.
 
         Raises:
-            ValueError: If the token count is less than 1.
+            ValidationError: If the token count is less than 1.
         """
         if value < 1:
-            raise ValueError(f"max_tokens must be >= 1, got {value}")
+            raise ValidationError.with_context(
+                f"max_tokens must be >= 1, got {value}",
+                field_name="max_tokens",
+                expected_range=">=1",
+                actual_value=value,
+                provider="Deepmind",
+            )
         return value
 
     def to_gemini_kwargs(self) -> Dict[str, Any]:
@@ -310,7 +319,7 @@ class GeminiModel(BaseProviderModel):
         client: The configured Google Generative AI client instance.
     """
 
-    PROVIDER_NAME: str = "Google"
+    PROVIDER_NAME: str = "Deepmind"
 
     def create_client(self) -> Any:
         """Create and configure the Google Generative AI client.
@@ -326,7 +335,10 @@ class GeminiModel(BaseProviderModel):
         """
         api_key: Optional[str] = self.model_info.get_api_key()
         if not api_key:
-            raise ProviderAPIError("Google API key is missing or invalid.")
+            raise ModelProviderError.for_provider(
+                provider_name=self.PROVIDER_NAME,
+                message="Google API key is missing or invalid.",
+            )
 
         genai.configure(api_key=api_key)
         logger.info("Listing available Gemini models from Google Generative AI:")
@@ -397,7 +409,11 @@ class GeminiModel(BaseProviderModel):
             ProviderAPIError: If the provider returns an error or no content.
         """
         if not request.prompt:
-            raise InvalidPromptError("Gemini prompt cannot be empty.")
+            raise InvalidPromptError.with_context(
+                "Gemini prompt cannot be empty.",
+                provider=self.PROVIDER_NAME,
+                model_name=self.model_info.name,
+            )
 
         logger.info(
             "Gemini forward invoked",
@@ -431,13 +447,15 @@ class GeminiModel(BaseProviderModel):
                 if key != "generation_config"
             }
 
-            # Extract timeout from parameters or use default
-            timeout = additional_params.pop("timeout", 30) if additional_params else 30
+            # Gemini SDK doesn't accept timeout parameter directly
+            # Extract timeout and remove it from the parameters
+            if additional_params and "timeout" in additional_params:
+                additional_params.pop("timeout", None)
 
+            # Gemini API expects 'contents' parameter, not 'prompt'
             response = generative_model.generate_content(
-                prompt=request.prompt,
+                contents=request.prompt,
                 generation_config=generation_config,
-                timeout=timeout,
                 **additional_params,
             )
             logger.debug(
@@ -446,7 +464,11 @@ class GeminiModel(BaseProviderModel):
 
             generated_text: str = response.text
             if not generated_text:
-                raise ProviderAPIError("Gemini returned no text.")
+                raise ProviderAPIError.for_provider(
+                    provider_name=self.PROVIDER_NAME,
+                    message="Gemini returned no text.",
+                    status_code=None,
+                )
 
             return ChatResponse(
                 data=generated_text,
@@ -455,10 +477,19 @@ class GeminiModel(BaseProviderModel):
             )
         except NotFound as nf:
             logger.exception("Gemini model not found or not accessible: %s", nf)
-            raise ProviderAPIError(str(nf)) from nf
+            raise ProviderAPIError.for_provider(
+                provider_name=self.PROVIDER_NAME,
+                message=f"Model not found or not accessible: {str(nf)}",
+                status_code=404,
+                cause=nf,
+            )
         except Exception as exc:
             logger.exception("Error in GeminiModel.forward")
-            raise ProviderAPIError(str(exc)) from exc
+            raise ProviderAPIError.for_provider(
+                provider_name=self.PROVIDER_NAME,
+                message=f"API error: {str(exc)}",
+                cause=exc,
+            )
 
     def calculate_usage(self, raw_output: Any) -> UsageStats:
         """Calculate usage statistics from the Gemini API response.

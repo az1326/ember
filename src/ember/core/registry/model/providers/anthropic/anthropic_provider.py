@@ -47,10 +47,12 @@ Usage example:
 
     # Generate a response
     response = model("What is the Ember framework?")
-    print(response.data)  # The model's response text
+    # Access response content with response.data
+    
+    # Example: "Ember is a framework for building composable LLM applications..."
 
     # Access usage statistics
-    print(f"Used {response.usage.total_tokens} tokens")
+    # Example: response.usage.total_tokens -> 256
     ```
 
 For higher-level usage, prefer the model registry or API interfaces:
@@ -59,7 +61,7 @@ For higher-level usage, prefer the model registry or API interfaces:
 
     # Using the models API (automatically handles authentication)
     response = models.anthropic.claude_3_sonnet("Tell me about Ember")
-    print(response.data)
+    # Access response with response.data
     ```
 """
 
@@ -72,7 +74,6 @@ import anthropic
 import yaml
 from pydantic import Field, field_validator
 from tenacity import retry, stop_after_attempt, wait_exponential
-from typing_extensions import TypedDict
 
 from ember.core.registry.model.base.schemas.chat_schemas import (
     ChatRequest,
@@ -83,6 +84,7 @@ from ember.core.registry.model.base.schemas.usage import UsageStats
 from ember.core.registry.model.base.utils.model_registry_exceptions import (
     InvalidPromptError,
     ProviderAPIError,
+    ValidationError,
 )
 from ember.core.registry.model.providers.base_provider import (
     BaseChatParameters,
@@ -205,7 +207,12 @@ class AnthropicConfig:
                 # Also add the short form (assuming 'provider:shortname' format).
                 valid_models.add(model["model_id"].split(":")[-1])
         if not valid_models:
-            valid_models = {"claude-3-", "claude-3.5-sonnet"}
+            valid_models = {
+                "claude-3-5-sonnet",
+                "claude-3.7-sonnet",
+                "claude-3-opus",
+                "claude-3-haiku",
+            }
         return valid_models
 
     @classmethod
@@ -310,10 +317,13 @@ class AnthropicChatParameters(BaseChatParameters):
             int: The validated token count.
 
         Raises:
-            ValueError: If the token count is less than 1.
+            ValidationError: If the token count is less than 1.
         """
         if value < 1:
-            raise ValueError(f"max_tokens must be >= 1, got {value}")
+            raise ValidationError(
+                message=f"max_tokens must be >= 1, got {value}",
+                context={"max_tokens": value, "min_allowed": 1},
+            )
         return value
 
     def to_anthropic_kwargs(self) -> Dict[str, Any]:
@@ -388,16 +398,14 @@ class AnthropicModel(BaseProviderModel):
         # Direct mapping from ember model names to Anthropic API model IDs
         model_mapping = {
             # Model ID to raw API name
-            "claude-3-sonnet": "claude-3-sonnet-20240229",
             "claude-3-opus": "claude-3-opus-20240229",
             "claude-3-haiku": "claude-3-haiku-20240307",
-            "claude-3.5-sonnet": "claude-3-5-sonnet-20240620",
+            "claude-3-5-sonnet": "claude-3-5-sonnet-20240620",
             "claude-3.7-sonnet": "claude-3-7-sonnet-20250219",
             # Handle split IDs (provider:model)
-            "anthropic:claude-3-sonnet": "claude-3-sonnet-20240229",
             "anthropic:claude-3-opus": "claude-3-opus-20240229",
             "anthropic:claude-3-haiku": "claude-3-haiku-20240307",
-            "anthropic:claude-3.5-sonnet": "claude-3-5-sonnet-20240620",
+            "anthropic:claude-3-5-sonnet": "claude-3-5-sonnet-20240620",
             "anthropic:claude-3.7-sonnet": "claude-3-7-sonnet-20250219",
         }
 
@@ -411,7 +419,7 @@ class AnthropicModel(BaseProviderModel):
             return raw_name
 
         # Fallback to default model
-        default_model: str = "claude-3-sonnet-20240229"  # Most reliable fallback
+        default_model: str = "claude-3-5-sonnet-20240620"  # Most reliable fallback
         logger.warning(
             "Anthropic model '%s' not recognized in configuration. Falling back to '%s'.",
             raw_name,

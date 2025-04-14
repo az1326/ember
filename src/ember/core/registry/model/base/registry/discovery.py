@@ -15,11 +15,11 @@ from ember.core.registry.model.providers.base_discovery import (
 from ember.core.registry.model.providers.deepmind.deepmind_discovery import (
     DeepmindDiscovery,
 )
-from ember.core.registry.model.providers.openai.openai_discovery import (
-    OpenAIDiscovery,
-)
+from ember.core.registry.model.providers.openai.openai_discovery import OpenAIDiscovery
 
 logger: logging.Logger = logging.getLogger(__name__)
+# Set default log level to WARNING to reduce verbosity
+logger.setLevel(logging.WARNING)
 
 
 class ModelDiscoveryService:
@@ -233,7 +233,7 @@ class ModelDiscoveryService:
         """
         import os
 
-        from ember.core.registry.model.config.settings import EmberSettings
+        from ember.core.config.schema import EmberSettings
 
         settings = EmberSettings()
 
@@ -242,9 +242,21 @@ class ModelDiscoveryService:
 
         # Check if registry has models attribute before accessing it
         if hasattr(settings.registry, "models"):
-            local_models = {
-                model.id: model.model_dump() for model in settings.registry.models
-            }
+            try:
+                # Handle both actual Model objects and test objects
+                local_models = {
+                    model.id: model.model_dump() for model in settings.registry.models
+                }
+                logger.debug(
+                    f"Loaded {len(local_models)} models from local configuration"
+                )
+                # Log model names for debugging
+                for model_id, model_data in local_models.items():
+                    logger.debug(
+                        f"Local model: {model_id} - Name: {model_data.get('name', 'Unknown')}"
+                    )
+            except Exception as e:
+                logger.error(f"Error loading models from settings: {e}")
 
         # Map provider prefixes to their environment variable keys
         provider_api_keys: Dict[str, str] = {
@@ -252,6 +264,7 @@ class ModelDiscoveryService:
             "anthropic": os.environ.get("ANTHROPIC_API_KEY", ""),
             "google": os.environ.get("GOOGLE_API_KEY", ""),
             "deepmind": os.environ.get("GOOGLE_API_KEY", ""),  # Uses same key as Google
+            "mock": os.environ.get("MOCK_API_KEY", ""),  # For testing purposes
         }
 
         def get_provider_from_model_id(model_id: str) -> str:
@@ -269,6 +282,7 @@ class ModelDiscoveryService:
             if model_id in local_models:
                 # Local configuration overrides API metadata except for API keys
                 # which we take from environment if available.
+                # Order is important here - local_models should override api_metadata
                 merged_data: Dict[str, Any] = {**api_metadata, **local_models[model_id]}
 
                 # Override with environment API key if available and not explicitly set
@@ -281,7 +295,7 @@ class ModelDiscoveryService:
                         merged_data["provider"]["default_api_key"] = api_key
             else:
                 # For discovered models not in local config, create reasonable defaults
-                logger.warning(
+                logger.debug(
                     "Model %s discovered via API but not in local config; using defaults with environment API key.",
                     model_id,
                 )
@@ -292,7 +306,7 @@ class ModelDiscoveryService:
                 merged_data = {
                     "id": model_id,
                     "name": api_metadata.get(
-                        "model_name", api_metadata.get("name", model_id.split(":")[-1])
+                        "name", api_metadata.get("model_name", model_id.split(":")[-1])
                     ),
                     "cost": {
                         "input_cost_per_thousand": 0.0,
@@ -447,7 +461,7 @@ class ModelDiscoveryService:
                 return {
                     "success": False,
                     "provider": provider_name,
-                    "error": f"Timeout after 15 seconds",
+                    "error": "Timeout after 15 seconds",
                 }
             except Exception as e:
                 logger.error(f"Error in async fetch from {provider_name}: {e}")

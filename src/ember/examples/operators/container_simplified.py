@@ -4,12 +4,12 @@ This example demonstrates how to create a container operator that encapsulates
 a simple processing pipeline, using JIT for tracing.
 
 To run:
-    poetry run python src/ember/examples/container_simplified.py
+    uv run python src/ember/examples/container_simplified.py
 """
 
 import logging
 import time
-from typing import Any, ClassVar, Dict, List, Optional, Type
+from typing import ClassVar, Type
 
 from pydantic import Field
 
@@ -53,7 +53,7 @@ class ProcessingSpecification(Specification):
     """Specification for text processing pipeline."""
 
     input_model: Type[EmberModel] = ProcessingInput
-    output_model: Type[EmberModel] = ProcessingOutput
+    structured_output: Type[EmberModel] = ProcessingOutput
 
 
 ###############################################################################
@@ -195,7 +195,7 @@ def main() -> None:
     print("\nProcessing Steps:")
     print(f"1. Normalization: '{input_text2}' -> '{normalized_text2}'")
     print(f"2. Enhancement: '{normalized_text2}' -> '{enhanced_text2}'")
-    print(f"Note: Second run is typically faster due to cached execution")
+    print("Note: Second run is typically faster due to cached execution")
 
 
 if __name__ == "__main__":

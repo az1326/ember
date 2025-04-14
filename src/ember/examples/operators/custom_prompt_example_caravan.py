@@ -14,14 +14,14 @@ Overview:
                   flows, providing labeled references and then labeling new flows.
 
 To run:
-    poetry run python src/ember/examples/custom_prompt_example_caravan.py
+    uv run python src/ember/examples/custom_prompt_example_caravan.py
 """
 
 import argparse
 import logging
 import os
 import sys
-from typing import ClassVar, Dict, List, Optional, Type, Union
+from typing import ClassVar, Type
 
 from ember.core.types.ember_model import EmberModel, Field
 
@@ -88,7 +88,6 @@ from ember.core.registry.model.base.schemas.cost import ModelCost, RateLimit
 from ember.core.registry.model.base.schemas.model_info import ModelInfo
 from ember.core.registry.model.base.schemas.provider_info import ProviderInfo
 from ember.core.registry.specification.specification import Specification
-from ember.core.types.ember_model import EmberModel
 
 
 def register_custom_model() -> ModelInfo:

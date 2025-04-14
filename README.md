@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/ember_icon_400@2x.svg" alt="Ember Logo" width="150"/>
+  <img src="docs/assets/logo_ember_icon@2x.png" alt="Ember Logo" width="150"/>
 </p>
 <p align="center">
   <img src="docs/assets/ember_workmark.svg" alt="Ember" width="350"/>
@@ -10,11 +10,11 @@
 </p>
 
 <p align="center">
-In collaboration with the following early users, contributors, and reviewers:
+This repository is in collaboration with the following early users, contributors, and reviewers:
 </p>
 
 <p align="center">
-Jared Quincy Davis<sup>F,S</sup>, Marquita Ellis<sup>I</sup>, Diana Arroyo<sup>I</sup>, Pravein Govindan Kannan<sup>I</sup>, Paul Castro<sup>I</sup>, Siddharth Sharma<sup>F,S</sup>, Lingjiao Chen<sup>MS</sup>, Omar Khattab<sup>D,MT</sup>, Parth Asawa<sup>B</sup>, Alan Zhu<sup>B</sup>, Connor Chow<sup>B</sup>, Jason Lee<sup>B</sup>, Jay Adityanag Tipirneni<sup>B</sup>, Chad Ferguson<sup>B</sup>, Kathleen Ge<sup>B</sup>, Kunal Agrawal<sup>B</sup>, Rishab Bhatia<sup>B</sup>, Rohan Penmatcha<sup>B</sup>, Sai Kolasani<sup>B</sup>, Théo Jaffrelot Inizan<sup>B</sup>, Deepak Narayanan<sup>N</sup>, Long Fei<sup>F</sup>, Aparajit Raghavan<sup>F</sup>, Eyal Cidon<sup>F</sup>, Jacob Schein<sup>F</sup>, Prasanth Somasundar<sup>F</sup>, Boris Hanin<sup>F,P</sup>, James Zou<sup>S</sup>, Joey Gonzalez<sup>B</sup>, Peter Bailis<sup>G,S</sup>, Ion Stoica<sup>A,B,D</sup>, Matei Zaharia<sup>D,B</sup>
+Jared Quincy Davis<sup>F,S</sup>, Marquita Ellis<sup>I</sup>, Diana Arroyo<sup>I</sup>, Pravein Govindan Kannan<sup>I</sup>, Paul Castro<sup>I</sup>, Siddharth Sharma<sup>F,S</sup>, Lingjiao Chen<sup>MS</sup>, Omar Khattab<sup>D,MT</sup>, Alan Zhu<sup>B</sup>, Parth Asawa<sup>B</sup>, Connor Chow<sup>B</sup>, Jason Lee<sup>B</sup>, Jay Adityanag Tipirneni<sup>B</sup>, Chad Ferguson<sup>B</sup>, Kathleen Ge<sup>B</sup>, Kunal Agrawal<sup>B</sup>, Rishab Bhatia<sup>B</sup>, Rohan Penmatcha<sup>B</sup>, Sai Kolasani<sup>B</sup>, Théo Jaffrelot Inizan<sup>B</sup>, Deepak Narayanan<sup>N</sup>, Long Fei<sup>F</sup>, Aparajit Raghavan<sup>F</sup>, Eyal Cidon<sup>F</sup>, Jacob Schein<sup>F</sup>, Prasanth Somasundar<sup>F</sup>, Boris Hanin<sup>F,P</sup>, James Zou<sup>S</sup>, Joey Gonzalez<sup>B</sup>, Peter Bailis<sup>G,S</sup>, Ion Stoica<sup>A,B,D</sup>, Matei Zaharia<sup>D,B</sup>
 </p>
 
 <p align="center">
@@ -23,7 +23,7 @@ Jared Quincy Davis<sup>F,S</sup>, Marquita Ellis<sup>I</sup>, Diana Arroyo<sup>I
 
 # <span style="color:#0366d6;">Ember</span>: A Compositional Framework for Compound AI Systems
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 ## Ember in a Nutshell
 
@@ -32,7 +32,7 @@ and XLA are to Neural Networks (NN) development. It's a compositional framework 
 execution affordances and graph execution optimization capabilities. It enables users to compose 
 complex NONs, and supports automatic parallelization and optimization of these. 
 
-Ember's vision is to enable development of **compound AI systems composed of, one day, millions-billions of calls** and beyond. Simple constructs--like **best-of-N graphs**, **verifier-prover structures**, and **ensembles with “voting-based” aggregation**--work surprisingly well in many regimes. 
+Ember's vision is to enable development of **compound AI systems composed of, one day, millions-billions of inference calls** and beyond. Simple constructs--like **best-of-N graphs**, **verifier-prover structures**, and **ensembles with “voting-based” aggregation**--work surprisingly well in many regimes. 
 
 This led us to believe that there is a rich architecture space for constructing and optimizing what we call “networks of networks” graphs, or **NONs**. This is analogous to how neural network architecture research uncovered many emergent properties of systems composed of simple artificial neurons. It would be frictionful to conduct NN research if we had to implement architectures from scratch via for-loops or implement bespoke libraries for vectorization and efficient execution. Similarly, it can be challenging at present to compose NON architectures of many calls, despite the **rapidly falling cost-per-token of intelligence**.
 
@@ -53,10 +53,9 @@ Ember's goal is to help unlock research and practice along this new frontier.
 
 ```python
 from typing import ClassVar
-from ember.api.operator import Operator, Specification
-from ember.api.xcs import jit
+from ember.api.operators import Operator, Specification, EmberModel
+from ember.xcs import jit
 from ember.api import non
-from ember.api.models import EmberModel
 
 # Define structured I/O types, in a TypedDict syntax
 class QueryInput(EmberModel):
@@ -125,7 +124,7 @@ class EnsembleReasoner(Operator[QueryInput, ReasonedOutput]):
         )
         
         self.judge = non.JudgeSynthesis(
-            model_name="anthropic:claude-3.5-sonnet",
+            model_name="anthropic:claude-3-5-sonnet",
             temperature=0.2
         )
     
@@ -166,30 +165,64 @@ print(f"Confidence: {result.confidence:.2f}")
    type-safe, reusable components with validated inputs and outputs
 2. **Automatic Parallelization**: Independent operations are automatically executed concurrently 
    across a full computational graph
-3. **XCS Optimization Framework**: Just-in-time tracing and execution optimization inspired by JAX/XLA 
+3. **XCS Optimization Framework**: "Accelerated Compound Systems" Just-in-time tracing and execution optimization with multiple strategies (trace, structural, enhanced). XCS is inspired by XLA, but intended more for accelerating compound systems vs. linear algebra operations, tuned for models and dicts, vs for vectors and numerical computation.
 4. **Multi-Provider Support**: Unified API across OpenAI, Anthropic, Claude, Gemini, and more 
    with standardized usage tracking
+5. **Transformation System**: Function transformations for vectorization (vmap), parallelization (pmap), and device sharding (mesh), with a composable interface for building complex transformations
+
+## XCS Architecture
+
+The Accelerated Compound Systems (XCS) module provides a computational graph-based system for building, optimizing, and executing complex operator pipelines:
+
+1. **Unified JIT System**: Multiple compilation strategies under a consistent interface:
+   - `trace`: Traditional execution tracing
+   - `structural`: Structure-based analysis
+   - `enhanced`: Improved parallelism detection and code analysis
+
+2. **Scheduler Framework**: Pluggable scheduler implementations for different execution patterns:
+   - `sequential`: Serial execution for debugging and determinism
+   - `parallel`: Thread-based parallel execution
+   - `wave`: Execution wave scheduling for optimal parallelism
+   - `topological`: Dependency-based execution ordering
+
+3. **Transform System**: High-level operations for data and computation transformations:
+   - `vmap`: Vectorized mapping for batch processing
+   - `pmap`: Parallel mapping across multiple workers
+   - `mesh`: Device mesh-based sharding for multi-device execution
+
+4. **Dependency Analysis**: Automatic extraction of dependencies between operations:
+   - Transitive closure calculation for complete dependency mapping
+   - Topological sorting with cycle detection
+   - Execution wave computation for parallel scheduling
 
 ## Installation
 
+Ember uses [uv](https://github.com/astral-sh/uv) as its recommended package manager for significantly faster installations and dependency resolution.
+
 ```bash
+# First, install uv if you don't have it
+curl -LsSf https://astral.sh/uv/install.sh | sh  # macOS/Linux
+# or 
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"  # Windows
+# or
+pip install uv  # Any platform
+
 # Quick install using uv (recommended)
 uv pip install ember-ai
 
-# Run directly without installing (fastest)
-uvx ember-ai  # If you have a CLI command
+# Run examples directly with uv (no activation needed)
+uv run python -c "import ember; print(ember.__version__)"
 
-# Or from source
+# Install from source for development
 git clone https://github.com/pyember/ember.git
 cd ember
 uv pip install -e ".[dev]"
 
-# Run examples directly with uv
-uv run python src/ember/examples/basic/minimal_example.py
-
-# Or install using pip (alternative)
+# Traditional pip installation (alternative, slower)
 pip install ember-ai
 ```
+
+For detailed installation instructions, troubleshooting, and environment management, see our [Installation Guide](INSTALLATION_GUIDE.md).
 
 ## Model Registry & Provider Integration
 
@@ -203,7 +236,7 @@ from ember.api.models import ModelEnum
 service = initialize_ember(usage_tracking=True)
 
 # Access models from different providers with the same API
-response = service(ModelEnum.OPENAI_GPT4O, "What is quantum computing?")
+response = service(ModelEnum.gpt_4o, "What is quantum computing?")
 print(response.data)
 
 # Track usage across providers
@@ -229,14 +262,14 @@ ensemble = non.UniformEnsemble(
 # 2. Create a judge to synthesize the ensemble responses
 # This combines multiple perspectives into a coherent, reasoned answer
 judge = non.JudgeSynthesis(
-    model_name="anthropic:claude-3-sonnet",
+    model_name="anthropic:claude-3-5-sonnet",
     temperature=0.2
 )
 
 # 3. Create a verifier to independently check the final output
 # This adds a quality control layer for factual accuracy and coherence
 verifier = non.Verifier(
-    model_name="anthropic:claude-3-haiku",
+    model_name="anthropic:claude-3-5-haiku",
     temperature=0.0
 )
 
@@ -253,15 +286,16 @@ result = pipeline(query="What causes tsunamis?")
 Ember's XCS system provides JAX/XLA-inspired tracing, transformation, and automatic parallelization:
 
 ```python
-from ember.api.xcs import jit, structural_jit, execution_options, vmap
+from ember.xcs import jit, execution_options, vmap, pmap, compose, explain_jit_selection
+from ember.api.operators import Operator
 
-# Basic JIT compilation for simple optimization
+# Basic JIT compilation with automatic strategy selection
 @jit
 class SimplePipeline(Operator):
     # ... operator implementation ...
 
-# Advanced structural JIT with parallel execution strategy
-@structural_jit(execution_strategy="parallel")
+# JIT with explicit mode selection
+@jit(mode="enhanced")
 class ComplexPipeline(Operator):
     def __init__(self):
         self.op1 = SubOperator1()
@@ -269,7 +303,7 @@ class ComplexPipeline(Operator):
         self.op3 = SubOperator3()
     
     def forward(self, *, inputs):
-        # These operations will be automatically parallelized when the execution graph is built
+        # These operations will be automatically parallelized
         result1 = self.op1(inputs=inputs)
         result2 = self.op2(inputs=inputs)
         
@@ -278,13 +312,24 @@ class ComplexPipeline(Operator):
         return combined
 
 # Configure execution parameters
-with execution_options(max_workers=8):
+with execution_options(scheduler="wave", max_workers=4):
     result = pipeline(query="Complex question...") 
 
+# Get explanation for JIT strategy selection
+explanation = explain_jit_selection(pipeline)
+print(f"JIT strategy: {explanation['strategy']}")
+print(f"Rationale: {explanation['rationale']}")
+
 # Vectorized mapping for batch processing
-@vmap
-def process_batch(inputs, model):
-    return model(inputs)
+batch_processor = vmap(my_operator)
+batch_results = batch_processor(inputs={"data": [item1, item2, item3]})
+
+# Parallel execution across multiple workers
+parallel_processor = pmap(my_operator, num_workers=4)
+parallel_results = parallel_processor(inputs=complex_data)
+
+# Compose transformations (vectorization + parallelism)
+pipeline = compose(vmap(batch_size=32), pmap(num_workers=4))(my_operator)
 ```
 
 ## Data Handling & Evaluation
@@ -292,7 +337,8 @@ def process_batch(inputs, model):
 Ember provides a comprehensive data processing and evaluation framework with pre-built datasets and metrics:
 
 ```python
-from ember.api.data import DatasetBuilder, EvaluationPipeline, Evaluator
+from ember.api.data import DatasetBuilder
+from ember.api.eval import EvaluationPipeline, Evaluator
 
 # Load a dataset with the builder pattern
 dataset = (DatasetBuilder()
@@ -328,4 +374,4 @@ print(f"Factual Accuracy: {results['factual_accuracy']:.2f}")
 
 ## License
 
-Ember is released under the [Apache 2.0 License](LICENSE).
+Ember is released under the [MIT License](LICENSE).

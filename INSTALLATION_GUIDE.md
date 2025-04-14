@@ -9,9 +9,9 @@ This guide provides detailed instructions for installing Ember in different envi
 
 ## Installation Methods
 
-### Method 1: Using uv (Recommended)
+### Method 1: Basic Installation with uv (Recommended)
 
-uv is the recommended package manager for Ember. It is extremely fast (10-100x faster than pip) and simplifies Python environment management.
+[uv](https://astral.sh/uv) is the recommended package manager for Ember. It is extremely fast (10-100x faster than pip) and simplifies Python environment management.
 
 1. **Install uv** if you don't have it already:
    ```bash
@@ -34,7 +34,6 @@ uv is the recommended package manager for Ember. It is extremely fast (10-100x f
    uv pip install ember-ai
    
    # Run examples without activating an environment
-   uv run python -c "import ember; print(ember.__version__)"
    ```
 
 3. **Install from source**:
@@ -52,7 +51,7 @@ uv is the recommended package manager for Ember. It is extremely fast (10-100x f
    
    By default, this installs Ember with OpenAI, Anthropic, and Google/Deepmind provider support.
 
-### Method 2: Development Installation
+### Method 2: Development Installation with uv
 
 If you want to develop or contribute to Ember:
 
@@ -78,6 +77,24 @@ If you want to develop or contribute to Ember:
    uvx mypy src
    uvx pytest
    ```
+
+### Method 3: Traditional pip Installation (Alternative)
+
+If you prefer using standard pip or don't want to install uv:
+
+```bash
+# Create a virtual environment (recommended)
+python -m venv ember_env
+source ember_env/bin/activate  # On Windows: ember_env\Scripts\activate
+
+# Install Ember with pip
+pip install ember-ai
+
+# For development installation
+pip install -e ".[dev]"
+```
+
+Note: This method is significantly slower for dependency resolution and doesn't provide the environment management benefits of uv.
 
 ## OS-Specific Installation Notes
 
@@ -166,6 +183,14 @@ uv pip install -e "." --no-cache
 # Install with specific package versions if needed
 uv pip install -e "." --no-deps
 uv pip install "specific-package==version"
+```
+
+### Other Known Installation Issue Resolutions
+
+When using conda with or without uv, you may encounter known pyarrow installation issues.
+```
+# Try installing pyarrow from conda-forge
+conda install -c conda-forge pyarrow
 ```
 
 ## Testing Your Installation

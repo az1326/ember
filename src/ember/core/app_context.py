@@ -15,13 +15,16 @@ import logging
 import os
 import threading
 from threading import Lock
-from typing import Any, ClassVar, Dict, Optional, Type
+from typing import Any, ClassVar, Optional
 
 from ember.core.config.manager import ConfigManager, create_config_manager
 from ember.core.registry.model.base.registry.model_registry import ModelRegistry
-from ember.core.registry.model.base.services.model_service import ModelService
 from ember.core.registry.model.base.services.usage_service import UsageService
 from ember.core.registry.model.initialization import initialize_registry
+from ember.core.utils.logging import configure_logging
+
+# Re-import for patching to work correctly
+import logging
 
 
 class EmberAppContext:
@@ -62,7 +65,9 @@ class EmberAppContext:
         self.logger = logger
 
 
-def create_ember_app(config_path: Optional[str] = None) -> EmberAppContext:
+def create_ember_app(
+    config_path: Optional[str] = None, verbose: bool = False
+) -> EmberAppContext:
     """
     Creates a fully initialized EmberAppContext with all core services.
 
@@ -82,15 +87,21 @@ def create_ember_app(config_path: Optional[str] = None) -> EmberAppContext:
         config_path: Optional path to a configuration file. If not provided,
                     the system will search standard locations and use environment
                     variables as fallbacks.
+        verbose: Whether to use verbose logging. If False (default), reduces verbosity
+                for non-essential components like model discovery and HTTP libraries.
 
     Returns:
         A fully configured EmberAppContext instance with all services initialized.
     """
+    # Configure logging first thing
+    configure_logging(verbose=verbose)
+
+    # Get the main ember logger
     logger = logging.getLogger("ember")
 
     # 1) Create the configuration manager
     config_manager = create_config_manager(config_path=config_path, logger=logger)
-    config_manager.load()
+    # Configuration will be loaded on first access
     logger.debug("Configuration manager initialized")
 
     # 2) Initialize API keys from environment variables

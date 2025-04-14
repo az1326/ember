@@ -8,11 +8,7 @@ from urllib.error import HTTPError
 
 from datasets import Dataset, DatasetDict
 
-from ember.core.utils.data.base.loaders import (
-    HuggingFaceDatasetLoader,
-    IDatasetLoader,
-)
-from ember.core.utils.data.base.models import DatasetInfo
+from ember.core.utils.data.base.loaders import HuggingFaceDatasetLoader, IDatasetLoader
 
 
 class TestIDatasetLoader(unittest.TestCase):
@@ -50,7 +46,7 @@ class TestHuggingFaceDatasetLoader(unittest.TestCase):
     def setUp(self) -> None:
         """Set up test fixtures."""
         # Create a patcher for HfApi
-        self.hf_api_patcher = mock.patch("ember.core.utils.data.base.loaders.HfApi")
+        self.hf_api_patcher = mock.patch("src.ember.core.utils.data.base.loaders.HfApi")
         self.mock_hf_api_cls = self.hf_api_patcher.start()
         self.mock_hf_api = self.mock_hf_api_cls.return_value
 
@@ -59,7 +55,7 @@ class TestHuggingFaceDatasetLoader(unittest.TestCase):
 
         # Create a patcher for load_dataset
         self.load_dataset_patcher = mock.patch(
-            "ember.core.utils.data.base.loaders.load_dataset"
+            "src.ember.core.utils.data.base.loaders.load_dataset"
         )
         self.mock_load_dataset = self.load_dataset_patcher.start()
 
@@ -74,25 +70,25 @@ class TestHuggingFaceDatasetLoader(unittest.TestCase):
 
         # Create a patcher for enable_progress_bar
         self.enable_progress_bar_patcher = mock.patch(
-            "ember.core.utils.data.base.loaders.enable_progress_bar"
+            "src.ember.core.utils.data.base.loaders.enable_progress_bar"
         )
         self.mock_enable_progress_bar = self.enable_progress_bar_patcher.start()
 
         # Create a patcher for disable_progress_bar
         self.disable_progress_bar_patcher = mock.patch(
-            "ember.core.utils.data.base.loaders.disable_progress_bar"
+            "src.ember.core.utils.data.base.loaders.disable_progress_bar"
         )
         self.mock_disable_progress_bar = self.disable_progress_bar_patcher.start()
 
         # Create a patcher for enable_caching
         self.enable_caching_patcher = mock.patch(
-            "ember.core.utils.data.base.loaders.enable_caching"
+            "src.ember.core.utils.data.base.loaders.enable_caching"
         )
         self.mock_enable_caching = self.enable_caching_patcher.start()
 
         # Create a patcher for disable_caching
         self.disable_caching_patcher = mock.patch(
-            "ember.core.utils.data.base.loaders.disable_caching"
+            "src.ember.core.utils.data.base.loaders.disable_caching"
         )
         self.mock_disable_caching = self.disable_caching_patcher.start()
 
@@ -192,7 +188,8 @@ class TestHuggingFaceDatasetLoader(unittest.TestCase):
 
         # Verify error message contains useful information
         self.assertIn(dataset_name, str(context.exception))
-        self.assertIn("Failed to download", str(context.exception))
+        self.assertIn("Error loading dataset", str(context.exception))
+        self.assertIn("HTTP Error 404", str(context.exception))
 
         # Verify correct cleanup
         self.mock_disable_caching.assert_called_once()

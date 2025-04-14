@@ -43,7 +43,9 @@ Usage example:
 
     # Basic usage
     response = model("What is the Ember framework?")
-    print(response.data)  # The model's response text
+    # Access response content with response.data
+    
+    # Example: "The Ember framework is a Python library for composable LLM applications..."
 
     # Advanced usage with more parameters
     response = model(
@@ -54,8 +56,8 @@ Usage example:
     )
 
     # Accessing usage statistics
-    print(f"Used {response.usage.total_tokens} tokens")
-    print(f"Cost: ${response.usage.cost_usd:.6f}")
+    # Example: response.usage.total_tokens -> 145
+    # Example: response.usage.cost_usd -> 0.000145
     ```
 
 For higher-level usage, prefer the model registry or API interfaces:
@@ -72,25 +74,22 @@ import logging
 from typing import Any, Dict, Final, List, Optional, cast
 
 import openai
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
 from requests.exceptions import HTTPError
 from tenacity import retry, stop_after_attempt, wait_exponential
-from typing_extensions import TypedDict
 
+from ember.core.exceptions import ModelProviderError, ValidationError
 from ember.core.registry.model.base.schemas.chat_schemas import (
     ChatRequest,
     ChatResponse,
     ProviderParams,
 )
 from ember.core.registry.model.base.schemas.model_info import ModelInfo
-from ember.core.registry.model.base.schemas.usage import UsageStats
 from ember.core.registry.model.base.utils.model_registry_exceptions import (
     InvalidPromptError,
     ProviderAPIError,
 )
-from ember.core.registry.model.base.utils.usage_calculator import (
-    DefaultUsageCalculator,
-)
+from ember.core.registry.model.base.utils.usage_calculator import DefaultUsageCalculator
 from ember.core.registry.model.providers.base_provider import (
     BaseChatParameters,
     BaseProviderModel,
@@ -211,10 +210,16 @@ class OpenAIChatParameters(BaseChatParameters):
             int: The validated token count.
 
         Raises:
-            ValueError: If the token count is less than 1.
+            ValidationError: If the token count is less than 1.
         """
         if value < 1:
-            raise ValueError(f"max_tokens must be >= 1, got {value}")
+            raise ValidationError.with_context(
+                f"max_tokens must be >= 1, got {value}",
+                field_name="max_tokens",
+                expected_range=">=1",
+                actual_value=value,
+                provider="OpenAI",
+            )
         return value
 
     def to_openai_kwargs(self) -> Dict[str, Any]:
@@ -302,13 +307,29 @@ class OpenAIModel(BaseProviderModel):
             Any: The configured OpenAI client module.
 
         Raises:
-            ProviderAPIError: If the API key is missing or invalid.
+            ModelProviderError: If the API key is missing or invalid.
         """
         api_key: Optional[str] = self.model_info.get_api_key()
         if not api_key:
-            raise ProviderAPIError("OpenAI API key is missing or invalid.")
+            raise ModelProviderError.for_provider(
+                provider_name=self.PROVIDER_NAME,
+                message="OpenAI API key is missing or invalid.",
+            )
         openai.api_key = api_key
         return openai
+
+    def get_api_model_name(self) -> str:
+        """Get the model name formatted for OpenAI's API requirements.
+        
+        OpenAI API requires lowercase model names. This method ensures that
+        model names are properly formatted regardless of how they're stored
+        internally in the model registry.
+        
+        Returns:
+            str: The properly formatted model name for OpenAI API requests.
+        """
+        # OpenAI API requires lowercase model names
+        return self.model_info.name.lower() if self.model_info.name else ""
 
     def _prune_unsupported_params(
         self, model_name: str, kwargs: Dict[str, Any]
@@ -345,7 +366,11 @@ class OpenAIModel(BaseProviderModel):
             ProviderAPIError: For any unexpected errors during the API invocation.
         """
         if not request.prompt:
-            raise InvalidPromptError("OpenAI prompt cannot be empty.")
+            raise InvalidPromptError.with_context(
+                "OpenAI prompt cannot be empty.",
+                provider=self.PROVIDER_NAME,
+                model_name=self.model_info.name,
+            )
 
         logger.info(
             "OpenAI forward invoked",
@@ -378,16 +403,21 @@ class OpenAIModel(BaseProviderModel):
             openai_kwargs["max_completion_tokens"] = openai_kwargs.pop("max_tokens")
 
         # Prune parameters that are unsupported by the current model.
+        # Use the normalized model name from our provider-specific method
         openai_kwargs = self._prune_unsupported_params(
-            model_name=self.model_info.name,
+            model_name=self.get_api_model_name(),
             kwargs=openai_kwargs,
         )
 
         try:
             # Use the timeout parameter from the request or the default from BaseChatParameters
             timeout = openai_kwargs.pop("timeout", 30)
+            
+            # Get properly formatted model name for API using the provider-specific method
+            model_name = self.get_api_model_name()
+            
             response: Any = self.client.chat.completions.create(
-                model=self.model_info.name,
+                model=model_name,
                 timeout=timeout,
                 **openai_kwargs,
             )
@@ -403,4 +433,8 @@ class OpenAIModel(BaseProviderModel):
             raise
         except Exception as exc:
             logger.exception("Unexpected error in OpenAIModel.forward()")
-            raise ProviderAPIError(str(exc)) from exc
+            raise ProviderAPIError.for_provider(
+                provider_name=self.PROVIDER_NAME,
+                message=f"API error: {str(exc)}",
+                cause=exc,
+            )

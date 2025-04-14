@@ -5,12 +5,12 @@ API access. It shows how to create, compose, and execute ensemble operators with
 typing and simulation of multiple model responses.
 
 To run:
-    poetry run python src/ember/examples/operators/simplified_ensemble_example.py
+    uv run python src/ember/examples/operators/simplified_ensemble_example.py
 """
 
 import logging
 import random
-from typing import Any, ClassVar, Dict, List, Optional, Type
+from typing import Any, ClassVar, List, Type
 
 from ember.core.registry.operator.base.operator_base import Operator
 from ember.core.registry.specification.specification import Specification

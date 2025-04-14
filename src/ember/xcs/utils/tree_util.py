@@ -45,10 +45,9 @@ Examples:
 
 from __future__ import annotations
 
+import logging
 from typing import (
-    Callable,
     Dict,
-    Generic,
     Hashable,
     List,
     Protocol,
@@ -94,7 +93,75 @@ _PytreeRegistryType = Dict[
     Type[T],
     Tuple[FlattenFn[T, L, AuxType], UnflattenFn[T, L, AuxType]],
 ]
+# Initialize the registry
 _pytree_registry: _PytreeRegistryType = {}
+
+
+# Forward import for EmberModel
+from ember.core.types.ember_model import EmberModel
+
+
+# Functions for handling EmberModel in tree operations
+def _flatten_ember_model(model: EmberModel) -> Tuple[List[object], AuxType]:
+    """Flatten an EmberModel instance into its dictionary and type information.
+
+    Args:
+        model: The EmberModel instance to flatten
+
+    Returns:
+        A tuple containing:
+          - A single-element list with the model's dictionary representation
+          - Auxiliary data with the model's class for reconstruction
+    """
+    # Extract the model's data as a dictionary
+    model_dict = model.to_dict()
+    
+    # Store the exact type information including module path for reliable reconstruction
+    model_type = type(model)
+    type_path = f"{model_type.__module__}.{model_type.__qualname__}"
+    
+    return [model_dict], (model_type, type_path)
+
+
+def _unflatten_ember_model(aux: AuxType, children: List[object]) -> EmberModel:
+    """Reconstruct an EmberModel from its dictionary representation.
+
+    Args:
+        aux: Auxiliary data containing the model class
+        children: List containing the model's dictionary representation
+
+    Returns:
+        Reconstructed EmberModel instance
+    """
+    model_cls, type_path = aux
+    model_dict = children[0]
+
+    # Try to import the exact class using the type path
+    if isinstance(type_path, str):
+        try:
+            # Split module and class parts
+            last_dot = type_path.rfind('.')
+            if last_dot > 0:
+                module_name = type_path[:last_dot]
+                class_name = type_path[last_dot+1:]
+                
+                # Import module and get class
+                module = __import__(module_name, fromlist=[class_name])
+                actual_cls = getattr(module, class_name)
+                
+                # Reconstruct with proper type
+                if hasattr(actual_cls, "from_dict") and callable(getattr(actual_cls, "from_dict")):
+                    return actual_cls.from_dict(model_dict)
+        except (ImportError, AttributeError) as e:
+            # Log and fall back to provided class
+            logging.debug(f"Error importing {type_path}: {e}")
+
+    # Fallback to provided class
+    if hasattr(model_cls, "from_dict") and callable(getattr(model_cls, "from_dict")):
+        return model_cls.from_dict(model_dict)
+    
+    # Last resort
+    return model_cls(**model_dict)
 
 
 def register_tree(
@@ -434,3 +501,11 @@ def tree_unflatten(*, aux: AuxType, children: List[L]) -> object:
             f"Unregistered type {tree_type.__name__} expected a single leaf, got {len(children)}."
         )
     return children[0]
+
+
+# Register EmberModel with the tree utilities system after all functions are defined
+register_tree(
+    cls=EmberModel,
+    flatten_func=_flatten_ember_model,
+    unflatten_func=_unflatten_ember_model,
+)

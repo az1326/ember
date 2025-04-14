@@ -4,13 +4,38 @@ This script demonstrates how to list available models in the Ember registry
 using the simplified API. The script shows how to check for model availability
 and retrieve model information.
 
+IMPORTANT: Model pricing and context window information must be manually configured!
+When models are discovered via API, they DO NOT include pricing or context window 
+information automatically. You must:
+
+1. Add this information in your config.yaml file in the project root:
+   ```yaml
+   model_registry:
+     providers:
+       openai:
+         models:
+           - id: "gpt-4o"
+             name: "GPT-4o"
+             context_window: 128000  # <-- Add this for context window
+             cost:
+               input_cost_per_thousand: 5.0
+               output_cost_per_thousand: 15.0
+   ```
+
+2. Or register models with complete information in code using the ModelInfo class
+   as shown in the register_openai_models() and register_anthropic_models() functions below.
+
+See model pricing and specifications:
+https://docs.anthropic.com/en/docs/about-claude/models/all-models
+https://openai.com/api/pricing/
+
 To run:
-    poetry run python src/ember/examples/list_models.py
+    uv run python src/ember/examples/models/list_models.py
 """
 
 import logging
 import os
-from typing import Any, Dict, List
+from typing import List
 
 from prettytable import PrettyTable
 
@@ -21,9 +46,9 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 # Initialize the registry with auto_discover=True
-# This will attempt to discover models automatically during initialization
+# Using the get_registry() function will initialize the registry if needed
 logger.info("Initializing registry with auto_discover=True...")
-registry = models.initialize_registry(auto_discover=True)
+registry = models.get_registry()
 
 # Check if models were discovered during initialization
 model_ids = registry.list_models()
@@ -90,12 +115,20 @@ def register_openai_models():
         ),
     ]
 
-    # Register the models
+    # Register the models, skipping any that are already registered
+    registered_models = []
     for model_info in model_infos:
-        registry.register_model(model_info=model_info)
-        logger.info(f"Registered model: {model_info.id}")
+        if not registry.is_registered(model_info.id):
+            try:
+                registry.register_model(model_info=model_info)
+                logger.info(f"Registered model: {model_info.id}")
+                registered_models.append(model_info.id)
+            except ValueError:
+                logger.info(f"Model {model_info.id} already registered, skipping")
+        else:
+            logger.info(f"Model {model_info.id} already registered, skipping")
 
-    return [m.id for m in model_infos]
+    return registered_models
 
 
 def register_anthropic_models():
@@ -110,7 +143,7 @@ def register_anthropic_models():
     # Create the models
     model_infos = [
         models.ModelInfo(
-            id="anthropic:claude-3.5-sonnet",
+            id="anthropic:claude-3-5-sonnet",
             name="Claude 3.5 Sonnet",
             context_window=200000,
             cost=models.ModelCost(
@@ -143,12 +176,20 @@ def register_anthropic_models():
         ),
     ]
 
-    # Register the models
+    # Register the models, skipping any that are already registered
+    registered_models = []
     for model_info in model_infos:
-        registry.register_model(model_info=model_info)
-        logger.info(f"Registered model: {model_info.id}")
+        if not registry.is_registered(model_info.id):
+            try:
+                registry.register_model(model_info=model_info)
+                logger.info(f"Registered model: {model_info.id}")
+                registered_models.append(model_info.id)
+            except ValueError:
+                logger.info(f"Model {model_info.id} already registered, skipping")
+        else:
+            logger.info(f"Model {model_info.id} already registered, skipping")
 
-    return [m.id for m in model_infos]
+    return registered_models
 
 
 # Register models manually as a fallback
@@ -208,7 +249,7 @@ def list_available_models():
             providers["other"].append(model_id)
 
     # Print models by provider
-    print(f"\nFound {len(model_ids)} models across {len(providers)} providers")
+    logger.info(f"Found {len(model_ids)} models across {len(providers)} providers")
 
     # Add models to table
     for provider, ids in sorted(providers.items()):
@@ -232,10 +273,10 @@ def list_available_models():
                         ),
                     ]
                 )
-            except Exception as e:
+            except Exception:
                 table.add_row([provider, model_id, "Error", "Error", "Error"])
 
-    print(table)
+    logger.info(f"Model table:\n{table}")
 
 
 def check_specific_models(model_ids: List[str]):
@@ -244,29 +285,23 @@ def check_specific_models(model_ids: List[str]):
     Args:
         model_ids: List of model IDs to check
     """
-    print("\nChecking specific models:")
+    logger.info("Checking specific models:")
     for model_id in model_ids:
         exists = registry.is_registered(model_id)
         if exists:
             info = registry.get_model_info(model_id)
             logger.info(f"✅ Model '{model_id}' is available")
-            print(
-                f"   - Provider: {info.provider.name if hasattr(info.provider, 'name') else 'Unknown'}"
-            )
+            logger.info(f"   - Provider: {info.provider.name if hasattr(info.provider, 'name') else 'Unknown'}")
             if hasattr(info, "cost") and info.cost:
-                print(
-                    f"   - Input cost: ${info.cost.input_cost_per_thousand:.4f} per 1K tokens"
-                )
-                print(
-                    f"   - Output cost: ${info.cost.output_cost_per_thousand:.4f} per 1K tokens"
-                )
+                logger.info(f"   - Input cost: ${info.cost.input_cost_per_thousand:.4f} per 1K tokens")
+                logger.info(f"   - Output cost: ${info.cost.output_cost_per_thousand:.4f} per 1K tokens")
         else:
             logger.warning(f"❌ Model '{model_id}' is not available")
 
 
 def main():
     """Run the model discovery example."""
-    print("\n=== Ember Model Discovery Example ===\n")
+    logger.info("=== Ember Model Discovery Example ===")
 
     # Check if API keys are set
     check_api_keys()
@@ -279,21 +314,19 @@ def main():
         [
             "openai:gpt-4o",
             "openai:gpt-4o-mini",
-            "anthropic:claude-3.5-sonnet",
+            "anthropic:claude-3-5-sonnet",
             "anthropic:claude-3-opus",
         ]
     )
 
     # Example of the simpler usage pattern
-    print("\nUsing simpler direct model identification:")
-    print("To check if a model exists: registry.is_registered('openai:gpt-4o')")
-    print("To get model info: registry.get_model_info('openai:gpt-4o')")
-    print("To use a model: model_service = models.create_model_service(registry)")
-    print(
-        "               model_service.invoke_model('openai:gpt-4o', 'What is the capital of France?')"
-    )
-
-    print("\nExample completed!")
+    logger.info("Using simpler direct model identification:")
+    logger.info("To check if a model exists: registry.is_registered('openai:gpt-4o')")
+    logger.info("To get model info: registry.get_model_info('openai:gpt-4o')")
+    logger.info("To use a model: model_service = models.create_model_service(registry)")
+    logger.info("               model_service.invoke_model('openai:gpt-4o', 'What is the capital of France?')")
+    
+    logger.info("Example completed!")
 
 
 if __name__ == "__main__":

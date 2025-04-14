@@ -8,22 +8,15 @@ edge cases or threading issues.
 
 import os
 import sys
-import tempfile
 import threading
-import time
-from typing import Any, Dict, List, Optional
-from unittest.mock import MagicMock, patch
+from typing import Optional
 
 import atheris
 
 # Ensure Ember is in the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from ember.core.app_context import (
-    EmberAppContext,
-    EmberContext,
-    get_ember_context,
-)
+from ember.core.app_context import EmberAppContext, EmberContext, get_ember_context
 
 
 class MockRegistry:

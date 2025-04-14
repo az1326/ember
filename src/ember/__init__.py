@@ -59,19 +59,20 @@ Examples:
 from __future__ import annotations
 
 import importlib.metadata
-from typing import Any, Dict, Optional, Union
+from typing import Dict, Optional, Union, Any, Callable
 
 # Import primary API components - these are the only public interfaces
-from ember.api import data  # Dataset access (datasets("mmlu"), etc.)
-from ember.api import models  # Language model access (models.openai.gpt4, etc.)
-from ember.api import non  # Network of Networks patterns (non.UniformEnsemble, etc.)
-from ember.api import operators  # Operator registry (operators.get_operator(), etc.)
-from ember.api import xcs  # Execution optimization (xcs.jit, etc.)
+from ember.api import (
+    data,  # Dataset access (datasets("mmlu"), etc.)
+    models,  # Language model access (models.openai.gpt4, etc.)
+    non,  # Network of Networks patterns (non.UniformEnsemble, etc.)
+    operators,  # Operator registry (operators.get_operator(), etc.)
+    xcs,  # Execution optimization (xcs.jit, etc.)
+)
 
 # Import necessary components for initialization
-from ember.core.app_context import EmberAppContext, EmberContext, create_ember_app
-from ember.core.config.manager import ConfigManager, create_config_manager
-from ember.core.registry.model.base.registry.model_registry import ModelRegistry
+# NOTE: These imports are moved to their usage points to avoid circular imports
+# The components will be imported when needed in functions like initialize_ember and init
 
 # Version detection
 try:
@@ -94,7 +95,8 @@ def initialize_ember(
     api_keys: Optional[Dict[str, str]] = None,
     env_prefix: str = "EMBER_",
     initialize_context: bool = True,
-) -> Union[ModelRegistry, EmberAppContext]:
+    verbose_logging: bool = False,
+) -> Union["ModelRegistry", "EmberAppContext"]:
     """Initialize the Ember framework with a single, unified call.
 
     This function provides a high-level entry point for initializing all Ember
@@ -120,6 +122,8 @@ def initialize_ember(
         env_prefix: Prefix for environment variables to consider. Defaults to "EMBER_".
         initialize_context: Whether to initialize the global application context.
                           Set to False to only initialize the model registry.
+        verbose_logging: Whether to use verbose logging. If False (default), reduces
+                       verbosity for non-essential components like model discovery and HTTP libraries.
 
     Returns:
         If initialize_context is True: A fully initialized EmberAppContext containing
@@ -140,6 +144,13 @@ def initialize_ember(
         registry = initialize_ember(initialize_context=False)
         model = registry.get_model("openai:gpt-4")
     """
+    # Import here to avoid circular imports
+    from ember.core.utils.logging import configure_logging
+    from ember.core.config.manager import create_config_manager
+
+    # 0. Configure logging first
+    configure_logging(verbose=verbose_logging)
+
     # 1. Create the configuration manager with the provided config path
     config_manager = create_config_manager(config_path=config_path)
 
@@ -157,13 +168,79 @@ def initialize_ember(
 
     # 4. Initialize application context if requested
     if initialize_context:
-        app_context = create_ember_app(config_path=config_path)
+        # Import here to avoid circular imports
+        from ember.core.app_context import (
+            EmberAppContext,
+            EmberContext,
+            create_ember_app,
+        )
+
+        app_context = create_ember_app(config_path=config_path, verbose=verbose_logging)
         # Set the unified ember context as global
         EmberContext.initialize(app_context=app_context)
         return app_context
 
     # Return just the registry if global context isn't needed
     return registry
+
+
+def init(
+    config: Optional[Union[Dict[str, Any], ConfigManager]] = None,
+    usage_tracking: bool = False,
+) -> Callable:
+    """Initialize Ember and return a unified model service.
+
+    This function provides a simple entry point for initializing Ember and accessing
+    models directly through a callable service object, as shown in the README examples.
+
+    Args:
+        config: Optional configuration to override defaults. Can be a dictionary or a ConfigManager
+        usage_tracking: Whether to enable cost/token tracking
+
+    Returns:
+        A model service that can be called directly with models and prompts
+
+    Examples:
+        # Simple usage
+        service = init()
+        response = service("openai:gpt-4o", "What is the capital of France?")
+
+        # With usage tracking
+        service = init(usage_tracking=True)
+        response = service(models.ModelEnum.gpt_4o, "What is quantum computing?")
+        usage = service.usage_service.get_total_usage()
+    """
+    from ember.api.models import initialize_registry, ModelService, UsageService
+
+    # Initialize configuration if needed
+    config_manager = None
+    if isinstance(config, dict):
+        config_manager = create_config_manager()
+        for key, value in config.items():
+            config_manager.set(key, value)
+    elif isinstance(config, ConfigManager):
+        config_manager = config
+
+    # Initialize the registry with auto-discovery
+    registry = initialize_registry(auto_discover=True, config_manager=config_manager)
+
+    # Create usage service if tracking is enabled
+    usage_service = UsageService() if usage_tracking else None
+
+    # Create a model service that can be called directly
+    service = ModelService(registry=registry, usage_service=usage_service)
+
+    # Create a wrapper that allows direct calling with model ID and prompt
+    def service_wrapper(model_id_or_enum, prompt, **kwargs):
+        return service.invoke_model(model_id_or_enum, prompt, **kwargs)
+
+    # Add service attributes to the wrapper
+    service_wrapper.model_service = service
+    service_wrapper.registry = registry
+    if usage_service:
+        service_wrapper.usage_service = usage_service
+
+    return service_wrapper
 
 
 # Public interface - only export the main API components
@@ -174,5 +251,8 @@ __all__ = [
     "non",  # Network of Networks patterns
     "xcs",  # Execution optimization
     "initialize_ember",  # Global initialization function
+    "init",  # Simple initialization function (matches README examples)
+    "configure_logging",  # Logging configuration utility
+    "set_component_level",  # Fine-grained logging control
     "__version__",
 ]

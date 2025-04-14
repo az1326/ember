@@ -5,28 +5,27 @@ using simple mock operators that don't require external dependencies.
 It uses the new ember.api package structure.
 
 To run:
-    poetry run python src/ember/examples/simple_autograph_example.py
+    uv run python src/ember/examples/xcs/simple_autograph_example.py
 """
 
 import logging
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict
 
-from ember.api.xcs import jit
+from ember.xcs import jit, execution_options, JITMode, get_jit_stats
 from ember.core.registry.operator.base.operator_base import Operator
 from ember.core.registry.specification.specification import Specification
-from ember.xcs.engine.execution_options import execution_options
 
 ###############################################################################
 # Mock Operators
 ###############################################################################
 
 
-@jit()
+@jit(mode=JITMode.ENHANCED)
 class AddOperator(Operator):
     """Simple operator that adds a value to the input."""
 
-    specification = Specification(input_model=None, output_model=None)
+    specification = Specification(input_model=None, structured_output=None)
 
     def __init__(self, *, value: int = 1) -> None:
         self.value = value
@@ -40,7 +39,7 @@ class AddOperator(Operator):
 class MultiplyOperator(Operator):
     """Simple operator that multiplies the input by a value."""
 
-    specification = Specification(input_model=None, output_model=None)
+    specification = Specification(input_model=None, structured_output=None)
 
     def __init__(self, *, value: int = 2) -> None:
         self.value = value
@@ -54,7 +53,7 @@ class MultiplyOperator(Operator):
 class DelayOperator(Operator):
     """Simple operator that introduces a delay."""
 
-    specification = Specification(input_model=None, output_model=None)
+    specification = Specification(input_model=None, structured_output=None)
 
     def __init__(self, *, delay: float = 0.1) -> None:
         self.delay = delay
@@ -78,7 +77,7 @@ class CalculationPipeline(Operator):
     automatically, building a graph based on the actual execution trace.
     """
 
-    specification = Specification(input_model=None, output_model=None)
+    specification = Specification(input_model=None, structured_output=None)
 
     def __init__(
         self,
@@ -171,15 +170,22 @@ def main() -> None:
 
         print(f"Result: {result}")
         print(f"Value: {result['value']}")
-        print(f"Expected calculation: 20 + 10 = 30, then × 3 = 90")
+        print("Expected calculation: 20 + 10 = 30, then × 3 = 90")
         print(f"Time: {sequential_time:.4f}s (sequential execution)")
+        
+    # Get JIT statistics
+    stats = get_jit_stats(pipeline)
+    print("\nJIT Statistics:")
+    print(f"Cache hits: {stats.get('cache_hits', 0)}")
+    print(f"Cache misses: {stats.get('cache_misses', 0)}")
+    print(f"Strategy: {stats.get('strategy', 'unknown')}")
 
     # Add a summary
     print("\n=== Summary ===")
     print(f"First run time: {first_run_times[0]:.4f}s (includes tracing overhead)")
     print(f"Cached run time: {cached_time:.4f}s")
     print(f"Sequential execution time: {sequential_time:.4f}s")
-    print(f"\nKey benefits of autograph with JIT:")
+    print("\nKey benefits of autograph with JIT:")
     print("1. Automatic operator dependency discovery")
     print("2. Optimized execution with caching")
     print("3. Flexible execution strategies (parallel, sequential)")

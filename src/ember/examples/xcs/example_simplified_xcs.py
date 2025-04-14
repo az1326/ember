@@ -8,27 +8,55 @@ To run:
     poetry run python src/ember/examples/example_simplified_xcs.py
 """
 
+from typing import ClassVar, Optional, Type
+
 from ember.api.xcs import jit, pmap, vmap
 from ember.core.registry.operator.base.operator_base import Operator
-from ember.xcs.engine.execution_options import execution_options
-from ember.xcs.tracer.autograph import autograph
+from ember.core.registry.specification.specification import Specification
+from ember.core.types.ember_model import EmberModel
 
 # Import the API for advanced configuration
-from ember.xcs.tracer.tracer_decorator import JITOptions
+
+
+# Create input/output models for our operators
+class QueryInput(EmberModel):
+    query: str
+
+
+class QueryOutput(EmberModel):
+    result: str
+
+
+# Define specifications for our operators
+class SimpleOperatorSpec(Specification[QueryInput, QueryOutput]):
+    input_model: Optional[Type[QueryInput]] = QueryInput
+    structured_output: Optional[Type[QueryOutput]] = QueryOutput
 
 
 # Create a simple operator
 @jit  # Simple JIT usage
-class SimpleOperator(Operator):
-    def forward(self, *, inputs):
-        return {"result": inputs["query"].upper()}
+class SimpleOperator(Operator[QueryInput, QueryOutput]):
+    # Define the specification
+    specification: ClassVar[Specification] = SimpleOperatorSpec()
+
+    def forward(self, *, inputs: QueryInput) -> QueryOutput:
+        return QueryOutput(result=inputs.query.upper())
+
+
+# Define specification for advanced operator
+class AdvancedOperatorSpec(Specification[QueryInput, QueryOutput]):
+    input_model: Optional[Type[QueryInput]] = QueryInput
+    structured_output: Optional[Type[QueryOutput]] = QueryOutput
 
 
 # Use advanced JIT options
-@jit(options=JITOptions(sample_input={"query": "precompile"}))
-class AdvancedOperator(Operator):
-    def forward(self, *, inputs):
-        return {"result": inputs["query"] + "!"}
+@jit(sample_input={"query": "precompile"})
+class AdvancedOperator(Operator[QueryInput, QueryOutput]):
+    # Define the specification
+    specification: ClassVar[Specification] = AdvancedOperatorSpec()
+
+    def forward(self, *, inputs: QueryInput) -> QueryOutput:
+        return QueryOutput(result=inputs.query + "!")
 
 
 def main():
@@ -42,31 +70,33 @@ def main():
     # Demonstrate the operators in action
     print("Simple Operator Demo:")
     result1 = simple_op(inputs={"query": "hello world"})
-    print(f"  Input: 'hello world'")
+    print("  Input: 'hello world'")
     print(f"  Output: '{result1['result']}'")  # Should be "HELLO WORLD"
 
     print("\nAdvanced Operator Demo:")
     result2 = advanced_op(inputs={"query": "precompiled input"})
-    print(f"  Input: 'precompiled input'")
+    print("  Input: 'precompiled input'")
     print(f"  Output: '{result2['result']}'")  # Should be "precompiled input!"
 
     # Vectorization example
-    def process_item(item):
-        return item * 2
+    def process_item(inputs):
+        # Process the input and return a dictionary
+        return {"result": inputs["values"] * 2}
 
     # Vectorize the function
     print("\nVectorization Example:")
     batch_process = vmap(process_item)
-    inputs = [1, 2, 3]
-    batch_result = batch_process(inputs)
-    print(f"  Inputs: {inputs}")
-    print(f"  Vectorized Output: {batch_result}")  # Should be [2, 4, 6]
+    input_values = [1, 2, 3]
+    # Note: vmap expects a dict with keyword 'inputs'
+    batch_result = batch_process(inputs={"values": input_values})
+    print(f"  Inputs: {input_values}")
+    print(f"  Vectorized Output: {batch_result}")  # Should be {"result": [2, 4, 6]}
 
     # Parallelize the function
     print("\nParallelization Example:")
     parallel_process = pmap(process_item)
-    print(f"  The pmap decorator enables parallel processing across multiple cores")
-    print(f"  Usage: parallel_process([1, 2, 3])")
+    print("  The pmap decorator enables parallel processing across multiple cores")
+    print("  Usage: parallel_process(inputs={'values': [1, 2, 3]})")
 
     # Show autograph example
     print("\nAutograph Example:")

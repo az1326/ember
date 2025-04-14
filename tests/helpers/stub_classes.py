@@ -11,19 +11,15 @@ from __future__ import annotations
 
 from typing import (
     Any,
-    Callable,
     Dict,
     Generic,
     List,
     Optional,
     Protocol,
-    Type,
     TypeVar,
     Union,
     runtime_checkable,
 )
-
-from pydantic import BaseModel
 
 # Import the EmberModel to properly type operators
 from tests.helpers.ember_model import EmberModel
@@ -45,9 +41,9 @@ class OperatorProtocol(Protocol):
 class Specification:
     """Simplified specification that doesn't perform validation."""
 
-    def __init__(self, input_model=None, output_model=None):
+    def __init__(self, input_model=None, structured_output=None):
         self.input_model = input_model
-        self.output_model = output_model
+        self.structured_output = structured_output
         self.prompt_template = None
 
     def validate_inputs(self, *, inputs):

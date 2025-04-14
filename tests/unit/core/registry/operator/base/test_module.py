@@ -30,11 +30,7 @@ from ember.core.registry.operator.base._module import (
     ember_field,
     static_field,
 )
-from ember.xcs.utils.tree_util import (
-    _pytree_registry,
-    tree_flatten,
-    tree_unflatten,
-)
+from ember.xcs.utils.tree_util import _pytree_registry, tree_flatten, tree_unflatten
 
 # -----------------------------------------------------------------------------
 # Field Creation Tests
@@ -354,7 +350,7 @@ def test_boundmethod_structure() -> None:
     assert hasattr(
         BoundMethod, "__self__"
     ), "BoundMethod should have a __self__ attribute"
-    assert hasattr(BoundMethod, "__call__"), "BoundMethod should have a __call__ method"
+    assert callable(BoundMethod), "BoundMethod should have a __call__ method"
 
 
 def test_boundmethod_call_specification() -> None:

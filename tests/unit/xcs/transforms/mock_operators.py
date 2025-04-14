@@ -5,20 +5,18 @@ These simplified mock operators don't use actual validation or complex logic,
 making them suitable for testing the transform functions.
 """
 
-import dataclasses
 import random
 import threading
 import time
-from typing import Any, Dict, List, Optional, Protocol
 
 
 # Define our own simplified base classes to avoid import errors
 class Specification:
     """Simplified specification that doesn't perform validation."""
 
-    def __init__(self, input_model=None, output_model=None):
+    def __init__(self, input_model=None, structured_output=None):
         self.input_model = input_model
-        self.output_model = output_model
+        self.structured_output = structured_output
 
     def validate_inputs(self, *, inputs):
         """No-op input validation."""
